@@ -25,27 +25,46 @@ Three providers are integrated. Each one only needs a free API key:
 A provider with no key configured is simply skipped at fetch time, so you can run the
 app with one, two or all three.
 
-## Getting started
+## Requirements
+
+- [Docker](https://www.docker.com/products/docker-desktop/) — the whole stack (app,
+  MySQL, Redis) runs in containers via [Laravel Sail](https://laravel.com/docs/sail).
+- PHP 8.3+ and Composer on the host, only to install the dependencies the first time.
+
+## Getting started (Docker)
 
 ```bash
 git clone <repo> && cd innoscripta-news-aggregator
 cp .env.example .env
-composer install
 
 # add your provider keys to .env
 # NEWSAPI_KEY=...
 # GUARDIAN_KEY=...
 # NYT_KEY=...
 
-./vendor/bin/sail up -d
+composer install                                # installs dependencies, incl. Sail
+
+./vendor/bin/sail up -d                          # build & start the containers
 ./vendor/bin/sail artisan key:generate
 ./vendor/bin/sail artisan migrate
+./vendor/bin/sail artisan news:fetch --sync      # first import
 ```
 
-The API is then available at `http://localhost/api`.
+The API is then available at **http://localhost:8080/api** (`APP_PORT` in `.env`,
+set to 8080 to stay clear of anything already on port 80).
 
-> Prefer running without Docker? Point the `DB_*` variables at any MySQL instance (or
-> `DB_CONNECTION=sqlite`) and use `php artisan` instead of `./vendor/bin/sail artisan`.
+Handy Sail commands:
+
+```bash
+./vendor/bin/sail ps      # container status
+./vendor/bin/sail down    # stop the stack (add -v to also drop the database volume)
+```
+
+> No host PHP? Install the dependencies in a container instead:
+> `docker run --rm -v "$(pwd):/opt" -w /opt laravelsail/php83-composer:latest composer install`
+>
+> Prefer running without Docker altogether? Point the `DB_*` variables at any MySQL
+> instance (or set `DB_CONNECTION=sqlite`) and use `php artisan` directly.
 
 ## Fetching articles
 
