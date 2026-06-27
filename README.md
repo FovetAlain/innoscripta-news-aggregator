@@ -155,6 +155,14 @@ Used by a frontend to build filter controls:
 }
 ```
 
+## Rate limiting
+
+All `/api` routes are throttled to **60 requests/minute** (per authenticated user, or
+per IP for guests). The credential endpoints (`/register`, `/login`) have a tighter
+**5/minute** budget keyed by email + IP to slow brute-force attempts. Limiters live in
+`AppServiceProvider`; responses carry the standard `X-RateLimit-*` headers and return
+`429` once exceeded.
+
 ## Architecture notes
 
 - **Providers** — every source implements `App\Services\News\Contracts\NewsProvider`
