@@ -14,11 +14,13 @@ return new class extends Migration
             $table->foreignId('category_id')->nullable()->constrained()->nullOnDelete();
             $table->foreignId('author_id')->nullable()->constrained()->nullOnDelete();
 
-            // Which upstream API delivered the article, plus its id over there.
-            $table->string('provider');
-            $table->string('external_id');
+            // Which upstream API delivered the article. external_id is a sha256 of
+            // the provider's natural id (often a long URL), hashed so it stays
+            // indexable whatever its original length.
+            $table->string('provider', 20);
+            $table->string('external_id', 64);
 
-            $table->string('title');
+            $table->string('title', 500);
             $table->text('description')->nullable();
             $table->longText('content')->nullable();
             $table->string('url', 1000);

@@ -43,7 +43,9 @@ class ArticleImporter
     private function store(ArticleData $data): void
     {
         Article::updateOrCreate(
-            ['provider' => $data->provider, 'external_id' => $data->externalId],
+            // external id is sometimes the full url which is too long to index nicely,
+            // so we just hash it to a fixed length.
+            ['provider' => $data->provider, 'external_id' => hash('sha256', $data->externalId)],
             [
                 'source_id' => $this->resolveSource($data->sourceName),
                 'category_id' => $this->resolveCategory($data->categoryName),
