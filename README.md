@@ -66,6 +66,24 @@ Handy Sail commands:
 > Prefer running without Docker altogether? Point the `DB_*` variables at any MySQL
 > instance (or set `DB_CONNECTION=sqlite`) and use `php artisan` directly.
 
+## Demo data (no API keys needed)
+
+To explore the API without configuring any provider, seed realistic fake data:
+
+```bash
+./vendor/bin/sail artisan migrate:fresh --seed
+```
+
+This creates 150 articles spread across sources, categories and authors, plus a demo
+account you can log in with:
+
+| Email | Password |
+|-------|----------|
+| `demo@example.com` | `password` |
+
+That account comes with a few preferences set, so `GET /api/feed` returns a filtered
+subset out of the box.
+
 ## Fetching articles
 
 Pull the latest articles from every configured provider:
