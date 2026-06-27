@@ -1,58 +1,148 @@
-<p align="center"><a href="https://laravel.com" target="_blank"><img src="https://raw.githubusercontent.com/laravel/art/master/logo-lockup/5%20SVG/2%20CMYK/1%20Full%20Color/laravel-logolockup-cmyk-red.svg" width="400" alt="Laravel Logo"></a></p>
+# News Aggregator API
 
-<p align="center">
-<a href="https://github.com/laravel/framework/actions"><img src="https://github.com/laravel/framework/workflows/tests/badge.svg" alt="Build Status"></a>
-<a href="https://packagist.org/packages/laravel/framework"><img src="https://img.shields.io/packagist/dt/laravel/framework" alt="Total Downloads"></a>
-<a href="https://packagist.org/packages/laravel/framework"><img src="https://img.shields.io/packagist/v/laravel/framework" alt="Latest Stable Version"></a>
-<a href="https://packagist.org/packages/laravel/framework"><img src="https://img.shields.io/packagist/l/laravel/framework" alt="License"></a>
-</p>
+A Laravel backend that aggregates articles from several news providers, stores them
+locally and exposes a REST API for searching, filtering and a per-user personalized feed.
 
-## About Laravel
+Built for the innoscripta backend take-home challenge.
 
-Laravel is a web application framework with expressive, elegant syntax. We believe development must be an enjoyable and creative experience to be truly fulfilling. Laravel takes the pain out of development by easing common tasks used in many web projects, such as:
+## Stack
 
-- [Simple, fast routing engine](https://laravel.com/docs/routing).
-- [Powerful dependency injection container](https://laravel.com/docs/container).
-- Multiple back-ends for [session](https://laravel.com/docs/session) and [cache](https://laravel.com/docs/cache) storage.
-- Expressive, intuitive [database ORM](https://laravel.com/docs/eloquent).
-- Database agnostic [schema migrations](https://laravel.com/docs/migrations).
-- [Robust background job processing](https://laravel.com/docs/queues).
-- [Real-time event broadcasting](https://laravel.com/docs/broadcasting).
+- PHP 8.3 / Laravel 13
+- MySQL 8 + Redis (via Laravel Sail / Docker)
+- Sanctum token authentication
+- Pest for the test suite
 
-Laravel is accessible, powerful, and provides tools required for large, robust applications.
+## Data sources
 
-## Learning Laravel
+Three providers are integrated. Each one only needs a free API key:
 
-Laravel has the most extensive and thorough [documentation](https://laravel.com/docs) and video tutorial library of all modern web application frameworks, making it a breeze to get started with the framework.
+| Provider | Where to get a key |
+|----------|--------------------|
+| NewsAPI | https://newsapi.org |
+| The Guardian | https://open-platform.theguardian.com/access |
+| New York Times | https://developer.nytimes.com |
 
-In addition, [Laracasts](https://laracasts.com) contains thousands of video tutorials on a range of topics including Laravel, modern PHP, unit testing, and JavaScript. Boost your skills by digging into our comprehensive video library.
+A provider with no key configured is simply skipped at fetch time, so you can run the
+app with one, two or all three.
 
-You can also watch bite-sized lessons with real-world projects on [Laravel Learn](https://laravel.com/learn), where you will be guided through building a Laravel application from scratch while learning PHP fundamentals.
-
-## Agentic Development
-
-Laravel's predictable structure and conventions make it ideal for AI coding agents like Claude Code, Cursor, and GitHub Copilot. Install [Laravel Boost](https://laravel.com/docs/ai) to supercharge your AI workflow:
+## Getting started
 
 ```bash
-composer require laravel/boost --dev
+git clone <repo> && cd innoscripta-news-aggregator
+cp .env.example .env
+composer install
 
-php artisan boost:install
+# add your provider keys to .env
+# NEWSAPI_KEY=...
+# GUARDIAN_KEY=...
+# NYT_KEY=...
+
+./vendor/bin/sail up -d
+./vendor/bin/sail artisan key:generate
+./vendor/bin/sail artisan migrate
 ```
 
-Boost provides your agent 15+ tools and skills that help agents build Laravel applications while following best practices.
+The API is then available at `http://localhost/api`.
 
-## Contributing
+> Prefer running without Docker? Point the `DB_*` variables at any MySQL instance (or
+> `DB_CONNECTION=sqlite`) and use `php artisan` instead of `./vendor/bin/sail artisan`.
 
-Thank you for considering contributing to the Laravel framework! The contribution guide can be found in the [Laravel documentation](https://laravel.com/docs/contributions).
+## Fetching articles
 
-## Code of Conduct
+Pull the latest articles from every configured provider:
 
-In order to ensure that the Laravel community is welcoming to all, please review and abide by the [Code of Conduct](https://laravel.com/docs/contributions#code-of-conduct).
+```bash
+./vendor/bin/sail artisan news:fetch --sync   # run inline, handy for a first import
+./vendor/bin/sail artisan news:fetch          # dispatch one queued job per provider
+```
 
-## Security Vulnerabilities
+Fetching is wired into the scheduler (hourly). In production run the scheduler and a
+queue worker:
 
-If you discover a security vulnerability within Laravel, please send an e-mail to Taylor Otwell via [taylor@laravel.com](mailto:taylor@laravel.com). All security vulnerabilities will be promptly addressed.
+```bash
+./vendor/bin/sail artisan schedule:work
+./vendor/bin/sail artisan queue:work
+```
 
-## License
+Articles are upserted on `(provider, external_id)`, so re-running a fetch updates
+existing rows instead of creating duplicates.
 
-The Laravel framework is open-sourced software licensed under the [MIT license](https://opensource.org/licenses/MIT).
+## Tests
+
+```bash
+./vendor/bin/sail artisan test     # or ./vendor/bin/pest
+```
+
+The suite runs on an in-memory SQLite database and fakes every outbound HTTP call, so
+no provider keys or network access are required.
+
+## API reference
+
+All responses are JSON. Authenticated routes expect a `Authorization: Bearer <token>`
+header obtained from `/register` or `/login`.
+
+### Authentication
+
+| Method | Endpoint | Auth | Description |
+|--------|----------|------|-------------|
+| POST | `/api/register` | – | Create an account, returns a token |
+| POST | `/api/login` | – | Log in, returns a token |
+| POST | `/api/logout` | ✓ | Revoke the current token |
+| GET | `/api/me` | ✓ | Current user |
+
+### Articles
+
+| Method | Endpoint | Auth | Description |
+|--------|----------|------|-------------|
+| GET | `/api/articles` | – | Paginated list with search & filters |
+| GET | `/api/articles/{id}` | – | Single article |
+| GET | `/api/feed` | ✓ | Articles matching the user's preferences |
+
+Supported query parameters on `/api/articles`:
+
+| Param | Example | Notes |
+|-------|---------|-------|
+| `q` | `?q=climate` | Free-text on title & description |
+| `sources` | `?sources=1,2` | Source ids (array or comma-separated) |
+| `categories` | `?categories=3` | Category ids |
+| `authors` | `?authors=5` | Author ids |
+| `date_from` | `?date_from=2026-01-01` | Published on/after |
+| `date_to` | `?date_to=2026-06-30` | Published on/before |
+| `per_page` | `?per_page=30` | 1–100, defaults to 15 |
+
+### Reference data
+
+Used by a frontend to build filter controls:
+
+| Method | Endpoint | Description |
+|--------|----------|-------------|
+| GET | `/api/sources` | All sources |
+| GET | `/api/categories` | All categories |
+| GET | `/api/authors` | All authors |
+
+### Preferences
+
+| Method | Endpoint | Auth | Description |
+|--------|----------|------|-------------|
+| GET | `/api/preferences` | ✓ | Read the user's preferences |
+| PUT | `/api/preferences` | ✓ | Update preferred sources / categories / authors |
+
+```jsonc
+// PUT /api/preferences
+{
+  "preferred_sources": [1, 4],
+  "preferred_categories": [2],
+  "preferred_authors": [7]
+}
+```
+
+## Architecture notes
+
+- **Providers** — every source implements `App\Services\News\Contracts\NewsProvider`
+  and maps its payload into a shared `ArticleData` DTO. Adding a source is one class
+  plus a line in `NewsServiceProvider`; nothing else changes (open/closed).
+- **Importer** — `ArticleImporter` resolves sources/categories/authors and upserts the
+  articles. It is provider-agnostic and runs inside a queued job per provider.
+- **Filtering** — query constraints live as Eloquent scopes on the `Article` model and
+  are applied conditionally in the controller, keeping the same building blocks reused
+  between the public listing and the personalized feed (DRY).
